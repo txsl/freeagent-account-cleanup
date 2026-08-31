@@ -2,9 +2,8 @@
 
 ## 1. Install
 
+Use your virtual environment (e.g., `virtualenv`) of choice, then install:
 ```bash
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -70,10 +69,11 @@ what this diff can safely catch.
 
 Open the workbook. Filter Account A to `match_status = matched`, spot-check
 a handful against Account B, and mark `approve_delete = Y` on the rows
-you're confident about. For anything `AMBIGUOUS - review`, filter Account B
-by that date to see the candidates yourself. Pay attention to
-`explanation_type`, `is_deletable`, and `is_locked` before approving
-anything that's explained — the Instructions tab spells out what each means.
+you're confident about. For anything `AMBIGUOUS - review` (which implies
+multiple line with the same date & transaction in either Account A or B),
+filter Account A and B by that date to see the candidates yourself. Pay attention
+to `explanation_type`, `is_deletable`, and `is_locked` before approving anything
+that's explained — the Instructions tab spells out what each means.
 
 Save the file.
 
