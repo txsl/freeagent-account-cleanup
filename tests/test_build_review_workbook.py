@@ -201,7 +201,13 @@ def get_column_letter_for_header_offset(offset):
 
 
 def _soffice_binary():
-    return shutil.which("soffice") or shutil.which("libreoffice")
+    candidates = [
+        shutil.which("soffice"),
+        shutil.which("libreoffice"),
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        str(Path.home() / "Applications/LibreOffice.app/Contents/MacOS/soffice"),
+    ]
+    return next((path for path in candidates if path and Path(path).is_file()), None)
 
 
 _RECALCULATE_MACRO = """<?xml version="1.0" encoding="UTF-8"?>
