@@ -12,6 +12,7 @@ Reads ACCOUNT_POLLUTED_ID / ACCOUNT_CLEAN_ID from .env. Writes:
 Sheet "Account A (Polluted)" gets two extra formula columns:
     match_count  = COUNTIFS against Account B's dated_on + amount
     match_status = "unmatched" / "matched" / "AMBIGUOUS - review"
+                  (matched only when the date/amount is unique on both sides)
 Plain COUNTIFS/IF only — no array formulas, FILTER, or TEXTJOIN — so every
 formula is a single well-known function you can click on and read.
 
@@ -22,7 +23,8 @@ delete_transactions.py against this file.
 The Instructions tab also shows a live balance reconciliation: FreeAgent's
 current balance for Account A minus the sum of whatever you've approved for
 deletion so far, so you can check that number against your real bank
-statement before actually deleting anything.
+statement before actually deleting anything. It includes a blank target-balance
+input and an alignment check for the user to fill in.
 """
 import json
 import os
@@ -160,7 +162,9 @@ def add_match_and_approval_columns(ws, n_rows, other_sheet_name):
             row=r, column=col_status,
             value=(
                 f'=IF({count_letter}{r}=0,"unmatched",'
-                f'IF({count_letter}{r}=1,"matched","AMBIGUOUS - review"))'
+                f'IF(AND({count_letter}{r}=1,'
+                f'COUNTIFS($B:$B,B{r},$C:$C,C{r})=1),'
+                f'"matched","AMBIGUOUS - review"))'
             ),
         )
         # approve_delete left blank for you to fill in
@@ -179,6 +183,8 @@ def add_balance_reconciliation(ws, start_row, polluted_current_balance, polluted
     amount_col = get_column_letter(RAW_HEADERS.index("amount") + 1)
     status_col = get_column_letter(len(RAW_HEADERS) + 2)   # matches add_match_and_approval_columns
     approve_col = get_column_letter(len(RAW_HEADERS) + 3)  # matches add_match_and_approval_columns
+    currency_format = '_(* #,##0.00_);_(* \\ (#,##0.00);_(* "-"??_);_(@_)'
+    count_format = '_(* #,##0_);_(* \\ (#,##0);_(* "-"??_);_(@_)'
 
     r = start_row
     ws.cell(row=r, column=1, value="Balance reconciliation").font = Font(bold=True, size=13)
@@ -186,6 +192,7 @@ def add_balance_reconciliation(ws, start_row, polluted_current_balance, polluted
 
     ws.cell(row=r, column=1, value="FreeAgent's current balance for Account A (Polluted), as of this fetch:")
     ws.cell(row=r, column=2, value=polluted_current_balance)
+    ws.cell(row=r, column=2).number_format = currency_format
     balance_row = r
     r += 1
 
@@ -194,11 +201,13 @@ def add_balance_reconciliation(ws, start_row, polluted_current_balance, polluted
         f"=SUMIFS('{polluted_sheet_name}'!${amount_col}:${amount_col},"
         f"'{polluted_sheet_name}'!${status_col}:${status_col},\"matched\")"
     ))
+    ws.cell(row=r, column=3).number_format = currency_format
     sum_row = r
     r += 1
 
     label_cell = ws.cell(row=r, column=1, value="Projected balance after deleting matched rows:")
     value_cell = ws.cell(row=r, column=3, value=f"=B{balance_row}-C{sum_row}")
+    value_cell.number_format = currency_format
     r += 1
 
     ws.cell(row=r, column=1, value="Sum of amounts approved for deletion (approve_delete = Y and match_status = matched):")
@@ -207,15 +216,20 @@ def add_balance_reconciliation(ws, start_row, polluted_current_balance, polluted
         f"'{polluted_sheet_name}'!${approve_col}:${approve_col},\"Y\","
         f"'{polluted_sheet_name}'!${status_col}:${status_col},\"matched\")"
     ))
+    ws.cell(row=r, column=2).number_format = currency_format
     sum_row = r
     r += 1
 
     label_cell = ws.cell(row=r, column=1, value="Projected balance after deleting the approved rows:")
     value_cell = ws.cell(row=r, column=2, value=f"=B{balance_row}-B{sum_row}")
+    approved_projected_balance_row = r
+    value_cell.number_format = currency_format
     label_cell.font = Font(bold=True)
     value_cell.font = Font(bold=True)
     r += 1
 
+    # Leave a blank spacer row before the explanatory note.
+    r += 1
     ws.cell(
         row=r, column=1,
         value=(
@@ -227,9 +241,46 @@ def add_balance_reconciliation(ws, start_row, polluted_current_balance, polluted
     )
     r += 1
 
+    # Leave a blank spacer row before the user-entered target section.
+    target_balance_row = r
+    target_label = ws.cell(row=r, column=1, value="Target balance (User fills in)")
+    target_value = ws.cell(row=r, column=2)
+    target_label.font = Font(bold=True)
+    target_value.font = Font(bold=True)
+    target_value.number_format = currency_format
+    r += 1
+    ws.cell(row=r, column=1, value="Alignment with target balance?")
+    ws.cell(row=r, column=2, value=f"=B{target_balance_row}=B{approved_projected_balance_row}")
+
+    r += 2
+
     ws.cell(row=r, column=1, value="FreeAgent's current balance for Account B (Clean), as of this fetch:")
     ws.cell(row=r, column=2, value=(f"=SUM('{clean_sheet_name}'!${amount_col}:${amount_col})"))
+    ws.cell(row=r, column=2).number_format = currency_format
 
+    r += 2
+
+    ws.cell(row=r, column=1, value="Number of transactions").font = Font(bold=True)
+    r += 1
+
+    ws.cell(row=r, column=1, value="In Account A (Polluted):")
+    ws.cell(row=r, column=2, value=f"=COUNTA('{polluted_sheet_name}'!$A:$A)-1")
+    ws.cell(row=r, column=2).number_format = count_format
+    total_transactions_row = r
+    r += 1
+
+    ws.cell(row=r, column=1, value="Approved for deletion:")
+    ws.cell(row=r, column=2, value=(
+        f"=COUNTIFS('{polluted_sheet_name}'!$O:$O,\"Y\","
+        f"'{polluted_sheet_name}'!$N:$N,\"matched\")"
+    ))
+    ws.cell(row=r, column=2).number_format = count_format
+    approved_transactions_row = r
+    r += 1
+
+    ws.cell(row=r, column=1, value="Remaining after approved deletions:")
+    ws.cell(row=r, column=2, value=f"=B{total_transactions_row}-B{approved_transactions_row}")
+    ws.cell(row=r, column=2).number_format = count_format
     r += 1
 
     return r

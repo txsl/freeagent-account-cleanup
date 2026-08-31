@@ -151,7 +151,8 @@ class TestSheetStructureWithoutAnEngine:
             "=COUNTIFS('Account B (Clean)'!$B:$B,B2,'Account B (Clean)'!$C:$C,C2)"
         )
         assert ws.cell(row=2, column=status_col).value == (
-            '=IF(M2=0,"unmatched",IF(M2=1,"matched","AMBIGUOUS - review"))'
+            '=IF(M2=0,"unmatched",IF(AND(M2=1,COUNTIFS($B:$B,B2,$C:$C,C2)=1),'
+            '"matched","AMBIGUOUS - review"))'
         )
 
 
@@ -177,9 +178,19 @@ class TestBalanceReconciliation:
             "'Account A (Polluted)'!$N:$N,\"matched\")"
         )
         assert ws.cell(row=6, column=2).value == "=B2-B5"
-        assert ws.cell(row=8, column=2).value == "=SUM('Account B (Clean)'!$C:$C)"
+        assert ws.cell(row=9, column=1).value == "Target balance (User fills in)"
+        assert ws.cell(row=9, column=2).value is None
+        assert ws.cell(row=10, column=1).value == "Alignment with target balance?"
+        assert ws.cell(row=10, column=2).value == "=B9=B6"
+        assert ws.cell(row=12, column=2).value == "=SUM('Account B (Clean)'!$C:$C)"
+        assert ws.cell(row=15, column=2).value == "=COUNTA('Account A (Polluted)'!$A:$A)-1"
+        assert ws.cell(row=16, column=2).value == (
+            "=COUNTIFS('Account A (Polluted)'!$O:$O,\"Y\","
+            "'Account A (Polluted)'!$N:$N,\"matched\")"
+        )
+        assert ws.cell(row=17, column=2).value == "=B15-B16"
         # returns the next free row so callers can't accidentally overlap content
-        assert next_row == 9
+        assert next_row == 18
 
     def test_amount_and_flag_columns_referenced_match_actual_sheet_layout(self):
         # Regression guard: the C/N/O column references above are computed
@@ -340,5 +351,5 @@ class TestMatchFormulasAgainstRealExcelEngine:
 
         wb2 = openpyxl.load_workbook(path, data_only=True)
         ws2 = wb2["Instructions"]
-        assert ws2.cell(row=3, column=2).value == pytest.approx(-230.0)  # signed sum: -200 + -30
-        assert ws2.cell(row=4, column=2).value == pytest.approx(1230.0)  # 1000.00 - (-230.00)
+        assert ws2.cell(row=5, column=2).value == pytest.approx(-230.0)  # signed sum: -200 + -30
+        assert ws2.cell(row=6, column=2).value == pytest.approx(1230.0)  # 1000.00 - (-230.00)
