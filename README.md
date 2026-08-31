@@ -2,7 +2,7 @@
 
 ## 1. Install
 
-Use your virtual environment (e.g., `virtualenv`) of choice, then install:
+Use your environment manager of choice (e.g., `virtualenv`) of choice, then install:
 ```bash
 pip install -r requirements.txt
 ```
