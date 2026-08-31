@@ -87,6 +87,25 @@ class TestFetchAndCache:
         assert cache_file.exists()
         assert json.loads(cache_file.read_text()) == fake_txns
 
+    def test_from_cache_returns_cached_rows_without_api_call(self, tmp_path, monkeypatch):
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        cached_rows = [{"url": "cached-1", "amount": -12.5}]
+        (cache_dir / "clean_rows.json").write_text(json.dumps(cached_rows))
+        monkeypatch.setattr(brw, "CACHE_DIR", str(cache_dir))
+
+        with patch("build_review_workbook.fa.get_bank_transactions") as mock_get:
+            rows = brw.fetch_and_cache("99", "clean", from_cache=True)
+
+        assert rows == cached_rows
+        mock_get.assert_not_called()
+
+    def test_from_cache_missing_file_exits_with_helpful_error(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(brw, "CACHE_DIR", str(tmp_path / "cache"))
+
+        with pytest.raises(SystemExit, match="No cache at"):
+            brw.fetch_and_cache("99", "clean", from_cache=True)
+
 
 def _row(url, dated_on, amount, description):
     return dict(
@@ -121,6 +140,30 @@ def _build_test_workbook(path):
     brw.add_match_and_approval_columns(ws_polluted, len(polluted_rows), "Account B (Clean)")
     wb.save(path)
     return ws_polluted
+
+
+class TestCurrentBalance:
+    def test_live_fetch_converts_and_caches_balance(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(brw, "CACHE_DIR", str(tmp_path / "cache"))
+        with patch("build_review_workbook.fa.get_bank_account", return_value={"current_balance": "1234.56"}) as mock_get:
+            balance = brw.get_current_balance("99")
+
+        assert balance == 1234.56
+        mock_get.assert_called_once_with("99")
+        cache_file = tmp_path / "cache" / "99_balance.json"
+        assert json.loads(cache_file.read_text()) == {"current_balance": 1234.56}
+
+    def test_from_cache_returns_balance_without_api_call(self, tmp_path, monkeypatch):
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        (cache_dir / "99_balance.json").write_text(json.dumps({"current_balance": 987.65}))
+        monkeypatch.setattr(brw, "CACHE_DIR", str(cache_dir))
+
+        with patch("build_review_workbook.fa.get_bank_account") as mock_get:
+            balance = brw.get_current_balance("99", from_cache=True)
+
+        assert balance == 987.65
+        mock_get.assert_not_called()
 
 
 class TestSheetStructureWithoutAnEngine:
