@@ -1,13 +1,32 @@
-# FreeAgent Revolut cleanup — setup & workflow
+# FreeAgent Revolut cleanup
 
-## 1. Install
+## 1. Context
 
-Use your environment manager of choice (e.g., `virtualenv`) of choice, then install:
+This tool helps clean up a FreeAgent bank account after a misconfigured tool
+has pushed transactions into the wrong account. It assumes the setup
+has since been corrected and that there is now a second, clean account that
+provides the ground truth for comparison.
+
+The failure mode this is designed for appears to be a commonly known one:
+Revolut's FreeAgent integration can push transactions into the main, or first-listed,
+bank account in FreeAgent. If that account is not the intended destination,
+duplicate transactions pollute and inter-mingle with real transactions. 
+The correctly configured account provides a useful reference for identifying them.
+
+The workbook compares the polluted and clean accounts by transaction date and
+amount. It suggests likely duplicates, but every deletion must be reviewed
+and explicitly approved by you.
+
+## 2. Setup & use
+
+### 2.1 Install
+
+Use your environment manager of choice (for example, `virtualenv`), then install:
 ```bash
 pip install -r requirements.txt
 ```
 
-## 2. Register an app and get a refresh token (one-off)
+### 2.2 Register an app and get a refresh token (one-off)
 
 FreeAgent's API is OAuth 2.0 only — there's no personal-access-token option.
 `get_refresh_token.py` does the one-off authorization locally, so your
@@ -31,7 +50,7 @@ Client Secret never passes through a third party.
 You won't need to repeat this — refresh tokens are long-lived (~20 years)
 and the other scripts renew the access token from it automatically each run.
 
-## 3. Configure
+### 2.3 Configure
 
 Confirm `.env` has `FREEAGENT_CLIENT_ID`, `FREEAGENT_CLIENT_SECRET`, and
 `FREEAGENT_REFRESH_TOKEN` all filled in (the last one comes from step 2
@@ -45,7 +64,7 @@ This prints every bank account with its ID. Copy the polluted account's ID
 and the new clean account's ID into `.env` as `ACCOUNT_POLLUTED_ID` /
 `ACCOUNT_CLEAN_ID`.
 
-## 4. Build the review workbook
+### 2.4 Build the review workbook
 
 ```bash
 python build_review_workbook.py
@@ -65,19 +84,19 @@ check the clean account's earliest date against how far back the
 misconfigured feed actually ran. Anything older than that falls outside
 what this diff can safely catch.
 
-## 5. Review
+### 2.5 Review
 
 Open the workbook. Filter Account A to `match_status = matched`, spot-check
 a handful against Account B, and mark `approve_delete = Y` on the rows
 you're confident about. For anything `AMBIGUOUS - review` (which implies
-multiple line with the same date & transaction in either Account A or B),
+multiple transactions with the same date and amount in either Account A or B),
 filter Account A and B by that date to see the candidates yourself. Pay attention
 to `explanation_type`, `is_deletable`, and `is_locked` before approving anything
 that's explained — the Instructions tab spells out what each means.
 
 Save the file.
 
-## 6. Delete (dry run first, always)
+### 2.6 Delete (dry run first, always)
 
 ```bash
 python delete_transactions.py review_<timestamp>.xlsx
@@ -95,18 +114,15 @@ live state right before acting (in case anything changed since you built
 the workbook), skips anything not currently deletable or flagged as an
 Invoice Receipt, and logs every action.
 
-**One thing worth testing carefully the first time:** FreeAgent's own docs
-show the transaction-delete endpoint as `/v2/bank_transaction/:id`
-(singular — not `/bank_transactions/:id` like everything else). Other
-integrators have reported confusing errors here. Consider approving just
+**One thing worth testing carefully the first time:** consider approving just
 one low-stakes row first, running `--live` on that alone, and confirming
 in the FreeAgent UI that it worked as expected before doing the rest.
 
-## Running the tests
+### 2.7 Running the tests
 
 The test suite mocks every FreeAgent API call — no credentials or network
-access needed — and covers token refresh, pagination, the singular
-`/bank_transaction/:id` delete endpoint, the matching formulas (run through
+access needed — and covers token refresh, pagination, the
+`/bank_transactions/:id` delete endpoint, the matching formulas (run through
 an actual LibreOffice recalculation, not just checked as text), and every
 branch of the delete logic including the live-run confirmation gate.
 
