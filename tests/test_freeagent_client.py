@@ -1,6 +1,8 @@
 import time
 from unittest.mock import Mock, patch
 
+import pytest
+
 import freeagent_client as fa
 
 
@@ -16,6 +18,15 @@ def _mock_response(json_data, status_code=200, headers=None):
 
 
 class TestTokenRefresh:
+    def test_token_endpoint_failure_raises_authentication_error(self):
+        with patch("freeagent_client.requests.post") as mock_post:
+            mock_post.return_value = _mock_response({}, status_code=401)
+
+            with pytest.raises(fa.AuthenticationError, match="HTTP 401"):
+                fa._refresh_access_token()
+
+        assert fa._access_token is None
+
     def test_refresh_sets_access_token_and_expiry_with_buffer(self):
         with patch("freeagent_client.requests.post") as mock_post:
             mock_post.return_value = _mock_response({
@@ -41,7 +52,8 @@ class TestTokenRefresh:
         assert kwargs["data"]["refresh_token"] == "test-refresh-token"
 
     def test_refresh_updates_stored_token_when_rotated(self, capsys):
-        with patch("freeagent_client.requests.post") as mock_post:
+        with patch("freeagent_client.requests.post") as mock_post, \
+             patch("freeagent_client.update_env_refresh_token") as mock_save:
             mock_post.return_value = _mock_response({
                 "access_token": "tok",
                 "expires_in": 3600,
@@ -50,7 +62,10 @@ class TestTokenRefresh:
             fa._refresh_access_token()
 
         assert fa.REFRESH_TOKEN == "brand-new-refresh-token"
-        assert "brand-new-refresh-token" in capsys.readouterr().out
+        mock_save.assert_called_once_with("brand-new-refresh-token")
+        output = capsys.readouterr().out
+        assert "brand-new-refresh-token" not in output
+        assert "saved to .env" in output
 
     def test_refresh_leaves_stored_token_unchanged_when_not_rotated(self):
         with patch("freeagent_client.requests.post") as mock_post:

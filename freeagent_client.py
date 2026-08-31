@@ -38,6 +38,10 @@ _access_token = None
 _access_token_expiry = 0.0  # unix timestamp
 
 
+class AuthenticationError(RuntimeError):
+    """Raised when FreeAgent refuses an access-token refresh."""
+
+
 def _refresh_access_token():
     global _access_token, _access_token_expiry, REFRESH_TOKEN
     resp = requests.post(
@@ -46,6 +50,13 @@ def _refresh_access_token():
         data={"grant_type": "refresh_token", "refresh_token": REFRESH_TOKEN},
         timeout=30,
     )
+    if resp.status_code >= 400:
+        # Do not let callers retry the same invalid refresh credentials once
+        # per workbook row. In particular, repeated 401s quickly turn into
+        # 429s at the token endpoint.
+        raise AuthenticationError(
+            f"FreeAgent token refresh failed (HTTP {resp.status_code})"
+        )
     resp.raise_for_status()
     data = resp.json()
     _access_token = data["access_token"]

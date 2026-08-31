@@ -62,6 +62,10 @@ def process(rows, live, log_path):
 
             try:
                 live_txn = fa.get_transaction(url)
+            except fa.AuthenticationError as e:
+                writer.writerow([url, dated_on, amount, desc, "fetch", "AUTH_ERROR", str(e)])
+                print(f"  Authentication failed; aborting remaining rows: {e}")
+                return
             except Exception as e:
                 writer.writerow([url, dated_on, amount, desc, "fetch", "ERROR", str(e)])
                 print(f"  Could not fetch current state, skipping: {e}")
