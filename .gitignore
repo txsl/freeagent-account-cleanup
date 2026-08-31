@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom stuff
+cache/*
+.python-version
+.DS_Store
+
+*.xlsx
+*.csv
