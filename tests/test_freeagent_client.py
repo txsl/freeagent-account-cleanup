@@ -220,14 +220,12 @@ class TestApiWrappers:
             "DELETE", "https://api.freeagent.com/v2/bank_transaction_explanations/9"
         )
 
-    def test_delete_transaction_uses_documented_singular_endpoint(self):
-        # Regression guard: FreeAgent's docs show this against
-        # /v2/bank_transaction/:id (singular), unlike every other endpoint.
-        # If this ever needs to change, it should be a deliberate edit here,
-        # not an accidental one.
+    def test_delete_transaction_uses_transaction_url(self):
+        # The URL returned by FreeAgent uses the plural bank_transactions
+        # resource path, which must be preserved for DELETE as well.
         with patch("freeagent_client._request") as mock_req:
             mock_req.return_value = _mock_response({})
             fa.delete_transaction("https://api.freeagent.com/v2/bank_transactions/42")
         mock_req.assert_called_once_with(
-            "DELETE", "https://api.freeagent.com/v2/bank_transaction/42"
+            "DELETE", "https://api.freeagent.com/v2/bank_transactions/42"
         )

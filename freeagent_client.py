@@ -153,13 +153,11 @@ def delete_explanation(explanation_url):
 
 
 def delete_transaction(transaction_url):
-    # NOTE: FreeAgent's own docs show this against a *singular*
-    # `/v2/bank_transaction/:id` path (not `/bank_transactions/:id` like
-    # every other endpoint). That's not a typo on our end — it's what
-    # https://dev.freeagent.com/docs/bank_transactions currently documents,
-    # and other integrators have hit confusing errors here before. Test
-    # this on one transaction before trusting it on a batch.
-    txn_id = transaction_url.rstrip("/").split("/")[-1]
-    url = f"{API_BASE}/bank_transaction/{txn_id}"
+    # Transaction URLs returned by FreeAgent use the plural resource path,
+    # and DELETE must use that same path. The API documentation currently
+    # shows a singular path in this section, but that path returns 404 for
+    # valid transactions; preserving the URL's resource path avoids that
+    # mismatch.
+    url = transaction_url
     resp = _request("DELETE", url)
     resp.raise_for_status()

@@ -72,6 +72,8 @@ def process(rows, live, log_path):
                 continue
 
             explanations = live_txn.get("bank_transaction_explanations") or []
+            action = "delete_transaction"
+            detail = ""
 
             if explanations:
                 exp_url = explanations[0]["url"]
@@ -92,10 +94,11 @@ def process(rows, live, log_path):
                     writer.writerow([url, dated_on, amount, desc, "remove_explanation", "SKIPPED", f"type={exp_type}"])
                     continue
 
+                action = "remove_explanation + delete_transaction"
+                detail = exp_type
                 if live:
                     try:
                         fa.delete_explanation(exp_url)
-                        writer.writerow([url, dated_on, amount, desc, "remove_explanation", "OK", exp_type])
                         print(f"  Removed explanation ({exp_type})")
                     except Exception as e:
                         writer.writerow([url, dated_on, amount, desc, "remove_explanation", "ERROR", str(e)])
@@ -103,19 +106,19 @@ def process(rows, live, log_path):
                         continue
                 else:
                     print(f"  [dry run] would remove explanation ({exp_type})")
-                    writer.writerow([url, dated_on, amount, desc, "remove_explanation", "DRY_RUN", exp_type])
 
             if live:
                 try:
                     fa.delete_transaction(url)
-                    writer.writerow([url, dated_on, amount, desc, "delete_transaction", "OK", ""])
+                    writer.writerow([url, dated_on, amount, desc, action, "OK", detail])
                     print("  Deleted transaction")
                 except Exception as e:
-                    writer.writerow([url, dated_on, amount, desc, "delete_transaction", "ERROR", str(e)])
+                    error_detail = f"{detail}; delete_transaction: {e}" if detail else str(e)
+                    writer.writerow([url, dated_on, amount, desc, action, "ERROR", error_detail])
                     print(f"  ERROR deleting transaction: {e}")
             else:
                 print("  [dry run] would delete transaction")
-                writer.writerow([url, dated_on, amount, desc, "delete_transaction", "DRY_RUN", ""])
+                writer.writerow([url, dated_on, amount, desc, action, "DRY_RUN", detail])
 
 
 def main():

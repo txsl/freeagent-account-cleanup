@@ -72,9 +72,10 @@ class TestProcess:
         mock_del_exp.assert_called_once_with("exp1")
         mock_del_txn.assert_called_once()
         rows = list(csv.DictReader(open(log_path)))
-        actions = [(r["action"], r["result"]) for r in rows]
-        assert ("remove_explanation", "OK") in actions
-        assert ("delete_transaction", "OK") in actions
+        assert len(rows) == 1
+        assert rows[0]["action"] == "remove_explanation + delete_transaction"
+        assert rows[0]["result"] == "OK"
+        assert rows[0]["detail"] == "Payment"
 
     def test_not_deletable_explanation_skips_transaction_entirely(self, tmp_path):
         log_path = tmp_path / "log.csv"
@@ -120,6 +121,19 @@ class TestProcess:
         assert len(rows) == 2
         assert all(r["result"] == "ERROR" for r in rows)
 
+    def test_authentication_failure_stops_before_retrying_next_row(self, tmp_path):
+        log_path = tmp_path / "log.csv"
+        with patch(
+            "delete_transactions.fa.get_transaction",
+            side_effect=dt.fa.AuthenticationError("token refresh failed"),
+        ) as mock_get:
+            dt.process([_row(url="u1"), _row(url="u2")], live=True, log_path=str(log_path))
+
+        mock_get.assert_called_once_with("u1")
+        rows = list(csv.DictReader(open(log_path)))
+        assert len(rows) == 1
+        assert rows[0]["result"] == "AUTH_ERROR"
+
     def test_dry_run_never_calls_live_functions_even_when_explained(self, tmp_path):
         log_path = tmp_path / "log.csv"
         txn = {"bank_transaction_explanations": [{"url": "exp1"}]}
@@ -132,9 +146,10 @@ class TestProcess:
         mock_del_exp.assert_not_called()
         mock_del_txn.assert_not_called()
         rows = list(csv.DictReader(open(log_path)))
-        actions = [(r["action"], r["result"]) for r in rows]
-        assert ("remove_explanation", "DRY_RUN") in actions
-        assert ("delete_transaction", "DRY_RUN") in actions
+        assert len(rows) == 1
+        assert rows[0]["action"] == "remove_explanation + delete_transaction"
+        assert rows[0]["result"] == "DRY_RUN"
+        assert rows[0]["detail"] == "Payment"
 
     def test_explanation_deletion_error_stops_before_deleting_transaction(self, tmp_path):
         log_path = tmp_path / "log.csv"
